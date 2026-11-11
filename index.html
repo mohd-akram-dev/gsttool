@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meesho GST Tool</title>
+  <meta name="description" content="Make the GSTR-1 JSON from Meesho GST reports, in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fd6'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='15' font-weight='700' fill='white' text-anchor='middle'%3EGST%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <div>
+        <h1>Meesho GST Tool</h1>
+        <p class="sub">GSTR-1 JSON from your Meesho reports. Files stay on your computer.</p>
+      </div>
+      <span class="badge" id="gstin-badge" hidden></span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card" aria-labelledby="h-files">
+      <div class="card-head">
+        <h2 id="h-files"><span class="step">1</span> Add files</h2>
+        <button type="button" class="link" id="clear-files" hidden>Start over</button>
+      </div>
+      <p class="muted">From the Meesho GST report: <b>tcs_sales.xlsx</b> and <b>tcs_sales_return.xlsx</b>.
+        From Meesho tax invoices: <b>Tax_invoice_details.xlsx</b>. Add last month's Tax_invoice_details too,
+        so credit notes for older orders are found.</p>
+      <label class="drop" id="drop">
+        <input type="file" id="file-input" multiple accept=".xlsx,.xls">
+        <span class="drop-main">Drop the Excel files here, or click to choose</span>
+        <span class="drop-sub">You can add them one by one or all together</span>
+      </label>
+      <ul class="file-list" id="file-list"></ul>
+    </section>
+
+    <section class="card" id="details-card" aria-labelledby="h-details" hidden>
+      <h2 id="h-details"><span class="step">2</span> Check details</h2>
+      <div class="grid" id="details-grid"></div>
+      <div id="hsn-desc"></div>
+    </section>
+
+    <section class="card" id="checks-card" aria-labelledby="h-checks" hidden>
+      <h2 id="h-checks"><span class="step">3</span> Checks</h2>
+      <div id="checks"></div>
+    </section>
+
+    <section class="card" id="t13-card" aria-labelledby="h-t13" hidden>
+      <h2 id="h-t13"><span class="step">4</span> Table 13: documents issued</h2>
+      <p class="muted">Invoice and credit-note number ranges, filled from Tax_invoice_details. Check them, edit any
+        cell, or add a row. These rows go into the JSON. If you fill Table 13 on the portal by hand, type them
+        exactly like this.</p>
+      <div class="table-wrap">
+        <table class="edit">
+          <thead>
+            <tr>
+              <th>Nature of document</th><th>Sr. No. from</th><th>Sr. No. to</th>
+              <th class="n">Total</th><th class="n">Cancelled</th><th class="n">Net issued</th><th>Source</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="t13-body"></tbody>
+        </table>
+      </div>
+      <div class="actions"><button type="button" class="secondary" id="t13-add">Add row</button></div>
+      <div id="t13-status"></div>
+    </section>
+
+    <section class="card" id="result-card" aria-labelledby="h-result" hidden>
+      <h2 id="h-result"><span class="step">5</span> Review and download</h2>
+      <div class="tiles" id="tiles"></div>
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <div id="tab-panel" role="tabpanel"></div>
+      <div class="actions">
+        <button type="button" class="primary" id="download" disabled>Download GSTR-1 JSON</button>
+        <span class="muted" id="download-note"></span>
+      </div>
+      <p class="muted small">Upload on the GST portal: Returns Dashboard → GSTR-1 → Prepare Offline → Upload.
+        Then check the summary on the portal before you file.</p>
+    </section>
+    <section class="card" id="gstr3b-card" aria-labelledby="h-3b" hidden>
+      <h2 id="h-3b"><span class="step">6</span> GSTR-3B: check and pay</h2>
+      <p class="muted">File GSTR-1 first. The portal then fills GSTR-3B Tables 3.1 and 3.2 from it; these
+        are the figures you should see there. No ITC is included (Table 4 = 0).</p>
+      <div id="gstr3b-tables"></div>
+      <h3 class="h3">Payment</h3>
+      <p class="muted small">Type the balance in your <b>Electronic Cash Ledger</b> (portal: Services → Ledgers),
+        after accepting Meesho's TCS in "TDS and TCS credit received". Leave 0 if there is none.</p>
+      <div class="grid" id="gstr3b-cash"></div>
+      <div id="gstr3b-pay"></div>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p class="muted small">Runs entirely in your browser; nothing is sent anywhere. You remain responsible for
+      checking the return before filing.</p>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

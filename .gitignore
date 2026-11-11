@@ -1,0 +1,19 @@
+# Real GST data must never be committed: this repo is public.
+*.zip
+*.xlsx
+*.xls
+*.csv
+returns_*.json
+GSTR1_*.json
+GSTR3B_*
+samples/private/
+tests/private/
+
+# Masked test files are allowed
+!samples/masked/**
+
+# Local tooling
+.claude/
+.vscode/
+Thumbs.db
+.DS_Store

@@ -115,3 +115,38 @@ NOT yet verified against the portal:
       follow the GSTN schema as remembered, not a file the portal accepted. Check against a
       filed GSTR-1 JSON download, or upload a month's JSON before filing (upload alone does
       not file).
+
+## 10. Payments & profit tab
+
+Code: `js/payreaders.js` (Orders CSV + payment xlsx, detected by headers / sheet names; store id
+and period from Meesho's file names), `js/recon.js` (engine), `js/reconxlsx.js` (Excel
+download, values only), `js/payapp.js` (screen and the two-tab switch), `js/dom.js` (helpers).
+
+Rules:
+
+- One row per sub-order from the Orders export. Payment lines are matched by sub-order; the
+  last non-blank payment status (files oldest first) decides Delivered vs Return. Blank-status
+  lines are claims / compensation.
+- Results: Cancelled (nothing due), RTO (settled at 0), Delivered-paid, Customer return
+  (return shipping charged; claim if any), Delivered-unpaid (estimate = median payout at the
+  same listing price, with the GST / TCS that usually come with it; overdue when the order is
+  14+ days older than the last payment date). Unknown statuses are listed, not counted.
+- Product cost is counted for pieces kept plus returned pieces that came back with a damage /
+  missing / wrong-product claim. Packaging per parcel shipped (delivered + RTO).
+- GST store (any line with GST % > 0): profit takes off GST inside the sale
+  ((sale + return) x rate / (100 + rate)) and adds back TCS (credit against GST). TDS stays a
+  cost (claimable in the income tax return).
+- Ads cost ("Ads Cost" sheet) is in the bank total and in profit by deduction month, not per SKU.
+- Payment lines for orders not in the Orders export (usually next month's) are in the bank
+  total only. Duplicate payment lines / ads across overlapping files are counted once.
+- Internal check: orders' money + later orders + ads must equal the cash total, else error.
+- Meesho's own arithmetic is checked on every line (components vs final settlement).
+- Not handled yet (warned if present): "Referral Payments" and "Compensation and Recovery"
+  sheets.
+
+Verified: `tests/recon.mjs` reproduces the hand analysis of three real stores (one GST, two
+non-GST) to the paisa: 111/111 checks (profit by month, cash by month, transfers, counts,
+GST, TCS, ads). Unit tests on a made-up store cover every result type. Browser test: all three
+stores, cost groups, Excel download, costs remembered after reload, mixed stores rejected.
+
+Costs are stored in localStorage key `meesho-costs-v1` (per store id), never in the repo.

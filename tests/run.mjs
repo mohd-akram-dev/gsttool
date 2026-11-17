@@ -15,6 +15,10 @@ import { buildGstr1 } from '../js/gstr1.js';
 import { toPortalJson } from '../js/json.js';
 import { buildGstr3b } from '../js/gstr3b.js';
 import { rangeSize, validateDocRows } from '../js/table13.js';
+import * as XLSX from '../lib/xlsx.js';
+import { readPaymentOrOrders, fileMeta } from '../js/payreaders.js';
+import { buildRecon, familyOf } from '../js/recon.js';
+import { buildReconWorkbook } from '../js/reconxlsx.js';
 
 let failures = 0;
 let passes = 0;
@@ -73,6 +77,93 @@ check('range generic ambiguous width', rangeSize('INV9', 'INV10') === null);
   check('t13 Total not matching range warns', warn.warnings.some((w) => w.startsWith('Row 1') && w.includes('covers 9')));
   check('t13 overlapping ranges warn', warn.warnings.some((w) => w.includes('overlap')));
   check('t13 warnings do not block', warn.errors.length === 0);
+}
+
+// ---------- payment reconciliation on a made-up store (all numbers invented) ----------
+{
+  const HDR = ['Sub Order No', 'Order Date', 'Dispatch Date', 'Product Name', 'Supplier SKU', 'Catalog ID', 'Order source',
+    'Live Order Status', 'Product GST %', 'Listing Price (Incl. taxes)', 'Quantity', 'Transaction ID', 'Payment Date',
+    'Final Settlement Amount', 'Price Type', 'Total Sale Amount (Incl. Shipping & GST)', 'Total Sale Return Amount (Incl. Shipping & GST)',
+    'Fixed Fee (Incl. GST)', 'Warehousing fee (inc Gst)', 'Return premium (incl GST)', 'Return premium (incl GST) of Return',
+    'Meesho Commission Percentage', 'Meesho Commission (Incl. GST)', 'Meesho gold platform fee (Incl. GST)',
+    'Meesho mall platform fee (Incl. GST)', 'Fixed Fee (Incl. GST)', 'Warehousing fee (Incl. GST)', 'Return Shipping Charge (Incl. GST)',
+    'GST Compensation (PRP Shipping)', 'Shipping Charge (Incl. GST)', 'Other Support Service Charges (Excl. GST)', 'Waivers (Excl. GST)',
+    'Net Other Support Service Charges (Excl. GST)', 'GST on Net Other Support Service Charges', 'TCS', 'TDS Rate %', 'TDS',
+    'Compensation', 'Claims', 'Recovery', 'Compensation Reason', 'Claims Reason', 'Recovery Reason'];
+  const line = (v) => HDR.map((h, i) => {
+    const map = { 0: v.sub, 1: v.odate, 2: v.odate, 3: 'Test product', 4: v.sku, 7: v.status, 8: String(v.gst ?? 3), 9: String(v.listing ?? 200),
+      10: '1', 11: v.txn, 12: v.pdate, 13: String(v.final), 15: String(v.sale ?? 0), 16: String(v.ret ?? 0), 27: String(v.retship ?? 0),
+      29: String(v.ship ?? 0), 34: String(v.tcs ?? 0), 35: '0.1', 36: String(v.tds ?? 0), 38: String(v.claims ?? 0) };
+    return i in map ? map[i] : (i >= 15 && i <= 39 ? '0' : '');
+  });
+  const pay = [
+    // A1 delivered and paid: 230 - 30 shipping - 1.12 TCS - 0.22 TDS = 198.66
+    { sub: 'A1_1', odate: '2026-01-05', sku: 'W1', status: 'Delivered', txn: 'T1', pdate: '2026-01-20', final: 198.66, sale: 230, ship: -30, tcs: -1.12, tds: -0.22 },
+    // A2 returned by the customer (157 return shipping), then a claim of 100 paid
+    { sub: 'A2_1', odate: '2026-01-06', sku: 'W1', status: 'Return', txn: 'T2', pdate: '2026-01-22', final: -157, sale: 230, ret: -230, retship: -157 },
+    { sub: 'A2_1', odate: '2026-01-06', sku: 'W1', status: '', txn: 'T3', pdate: '2026-02-05', final: 100, claims: 100 },
+    // A6 RTO, settled at 0
+    { sub: 'A6_1', odate: '2026-01-07', sku: 'W1', status: 'RTO', txn: 'NA', pdate: '2026-01-21', final: 0, sale: 230, ret: -230 },
+    // B9 next month's order, paid in the same transfer as the claim
+    { sub: 'B9_1', odate: '2026-02-01', sku: 'W1', status: 'Delivered', txn: 'T3', pdate: '2026-02-05', final: 150, sale: 180, ship: -30, listing: 180 },
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Disclaimer']]), 'Disclaimer');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Order Related Details'], HDR, HDR.map(() => 'X'), ...pay.map(line)]), 'Order Payments');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Ads Cost'], ['Deduction Duration', 'Deduction Date', 'Campaign ID', 'Ad Cost',
+    'Credits / Waivers / Discounts', 'Ad Cost incl. Credits/Waivers/Discounts', 'GST', 'Total Ads Cost'], ['', '', '', 'A', 'B', '(A + B)', '', ''],
+  ['2026-01-10', '2026-01-25', '999', '5', '0', '-5', '-0.90', '-5.90']]), 'Ads Cost');
+  const payName = '1234567_SP_ORDER_ADS_REFERRAL_PAYMENT_FILE_PREVIOUS_PAYMENT_2026-01-01_2026-02-28.xlsx';
+  const payFile = readPaymentOrOrders(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }), payName);
+
+  const csv = ['"Reason for Credit Entry","Sub Order No","Catalog ID","Order Date","Order source","Customer State","Product Name","SKU","Size","Quantity","Supplier Listed Price (Incl. GST + Commission)","Supplier Discounted Price (Incl GST and Commision)","Packet Id"',
+    '"DELIVERED","A1_1","1","2026-01-05","","Kerala","Silver watch","W1","Free Size","1","200.0","200.0",',
+    '"DELIVERED","A2_1","1","2026-01-06","","Kerala","Silver watch","W1","Free Size","1","200.0","200.0",',
+    '"DELIVERED","A3_1","1","2026-01-02","","Kerala","Golden set","S1","Free Size","1","200.0","200.0",',
+    '"DELIVERED","A4_1","1","2026-01-30","","Kerala","Golden set","S1","Free Size","1","200.0","200.0",',
+    '"CANCELLED","A5_1","1","2026-01-08","","Kerala","Silver watch","W1","Free Size","1","200.0","200.0",',
+    '"RTO_COMPLETE","A6_1","1","2026-01-07","","Kerala","Silver watch","W1","Free Size","1","200.0","200.0",'].join('\n');
+  const ordName = 'Orders_2026-01-01_2026-01-31_2026-02-10_1234567.csv';
+  const ordFile = readPaymentOrOrders(Buffer.from(csv, 'utf8'), ordName);
+
+  check('pay file read', payFile.kind === 'payments' && payFile.lines.length === 5 && payFile.ads.length === 1, JSON.stringify({ n: payFile.lines?.length, ads: payFile.ads?.length }));
+  check('orders file read', ordFile.kind === 'orders' && ordFile.orders.length === 6);
+  check('supplier id from names', fileMeta(payName).supplierId === '1234567' && ordFile.supplierId === '1234567');
+  check('family rules', familyOf('JwellerySet4') === 'Jewellery set' && familyOf('jrm8l-x', 'Silver watch') === 'Watch' && familyOf('SilverTiara1') === 'Tiara');
+
+  const files = [{ name: ordName, ...ordFile }, { name: payName, ...payFile }];
+  const r = buildRecon({ files, costs: { W1: 80, S1: 110 }, packaging: 10 });
+  const rec = Object.fromEntries(r.recs.map((x) => [x.sub, x]));
+  check('recon ok', r.ok, JSON.stringify(r.issues));
+  check('A1 paid', rec.A1_1.result === 'Delivered - paid' && rec.A1_1.paid === 198.66);
+  check('A1 GST 3% of 230', rec.A1_1.gstOut === 6.7 && rec.A1_1.tcsCredit === 1.12);
+  check('A1 profit 198.66-6.70+1.12-80-10', rec.A1_1.profit === 103.08, rec.A1_1.profit);
+  check('A2 return with claim', rec.A2_1.returned === 1 && rec.A2_1.lost === 1 && rec.A2_1.paid === -57 && rec.A2_1.profit === -147, JSON.stringify(rec.A2_1));
+  check('A3 overdue (14+ days before last payment)', rec.A3_1.result.includes('NOT PAID') && rec.A3_1.pending === 198.66);
+  check('A3 estimate carries GST and TCS', rec.A3_1.gstOut === 6.7 && rec.A3_1.tcsCredit === 1.12 && rec.A3_1.profit === 73.08, JSON.stringify(rec.A3_1));
+  check('A4 recent, not overdue', rec.A4_1.result.startsWith('Delivered - payment expected') && rec.A4_1.pending === 198.66);
+  check('A5 cancelled', rec.A5_1.result.startsWith('Cancelled') && rec.A5_1.profit === 0);
+  check('A6 RTO costs packaging only', rec.A6_1.result.startsWith('RTO') && rec.A6_1.profit === -10);
+  check('later order kept apart', r.orphans.length === 1 && r.totals.later === 150);
+  check('ads', r.totals.ads === -5.9 && r.kpi.ALL.ads === 5.9);
+  check('profit = orders - ads', r.kpi.ALL.profit === 86.34, r.kpi.ALL.profit);
+  check('cash by month', same(r.cash, [{ month: '2026-01', amount: 35.76 }, { month: '2026-02', amount: 250 }]), JSON.stringify(r.cash));
+  check('cash = orders + later + ads', r.totals.cash === 285.76 && r.totals.forOrders === 141.66);
+  check('bank transfers T1 T2 T3', same(r.credits.map((c) => [c.txn, c.amount]), [['T1', 198.66], ['T2', -157], ['T3', 250]]), JSON.stringify(r.credits));
+  check('kpi counts', same([r.kpi.ALL.orders, r.kpi.ALL.cancelled, r.kpi.ALL.rto, r.kpi.ALL.delivered, r.kpi.ALL.returns, r.kpi.ALL.kept], [6, 1, 1, 4, 1, 3]));
+  check('GST store detected', r.isGst);
+  check('issues: overdue + no-claim-free + later + ads', r.issues.some((i) => i.message.includes('not paid yet although')) && r.issues.some((i) => i.message.includes('next month')));
+  check('excel workbook builds', buildReconWorkbook(r).SheetNames.join() === 'Summary,Orders,Bank transfers,Products,Payment lines,Ads');
+
+  const noCost = buildRecon({ files, costs: { W1: 80 }, packaging: 10 });
+  check('missing cost blocks profit', !noCost.profitReady && same(noCost.missingCosts, ['S1']));
+  const twice = buildRecon({ files: [...files, { ...files[1], name: 'copy.xlsx' }], costs: { W1: 80, S1: 110 } });
+  check('same payment file twice is counted once', twice.totals.cash === 285.76 && twice.issues.some((i) => i.message.includes('more than one payment file')));
+  const mixed = buildRecon({ files: [files[0], { ...files[1], supplierId: '7654321' }], costs: {} });
+  check('two stores mixed is an error', !mixed.ok && mixed.issues[0].message.includes('different Meesho stores'));
+  let threw = false;
+  try { readPaymentOrOrders(Buffer.from('a,b\n1,2', 'utf8'), 'other.csv'); } catch { threw = true; }
+  check('unknown file is rejected', threw);
 }
 
 // ---------- golden test on real files ----------

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Meesho GST Tool</title>
-  <meta name="description" content="Make the GSTR-1 JSON from Meesho GST reports, in your browser.">
+  <meta name="description" content="GSTR-1 JSON, payment reconciliation and profit for Meesho sellers, in your browser.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fd6'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='15' font-weight='700' fill='white' text-anchor='middle'%3EGST%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -13,13 +13,17 @@
     <div class="wrap top-inner">
       <div>
         <h1>Meesho GST Tool</h1>
-        <p class="sub">GSTR-1 JSON from your Meesho reports. Files stay on your computer.</p>
+        <p class="sub">GST returns, payment reconciliation and profit for Meesho. Files stay on your computer.</p>
       </div>
       <span class="badge" id="gstin-badge" hidden></span>
     </div>
+    <nav class="wrap apptabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" data-tab="gst" aria-selected="true">GST returns</button>
+      <button type="button" role="tab" data-tab="pay" aria-selected="false">Payments &amp; profit</button>
+    </nav>
   </header>
 
-  <main class="wrap">
+  <main class="wrap" id="view-gst">
     <section class="card" aria-labelledby="h-files">
       <div class="card-head">
         <h2 id="h-files"><span class="step">1</span> Add files</h2>
@@ -92,11 +96,58 @@
     </section>
   </main>
 
+  <main class="wrap" id="view-pay" hidden>
+    <section class="card" aria-labelledby="h-pay-files">
+      <div class="card-head">
+        <h2 id="h-pay-files"><span class="step">1</span> Add files</h2>
+        <button type="button" class="link" id="pay-clear" hidden>Start over</button>
+      </div>
+      <p class="muted">From the Meesho Supplier Panel, for <b>one store</b>: the <b>Orders</b> export (CSV) for the month,
+        and the <b>payment files</b> (xlsx, "SP_ORDER_ADS_REFERRAL_PAYMENT_FILE") for that month and the next month,
+        because some payments arrive later. You can add another month's payment file later to close pending orders.</p>
+      <label class="drop" id="pay-drop">
+        <input type="file" id="pay-input" multiple accept=".csv,.xlsx">
+        <span class="drop-main">Drop the Orders CSV and payment Excel files here, or click to choose</span>
+        <span class="drop-sub">Several files at once is fine; the tool works out which is which</span>
+      </label>
+      <ul class="file-list" id="pay-files"></ul>
+    </section>
+
+    <section class="card" id="pay-costs-card" aria-labelledby="h-pay-costs" hidden>
+      <h2 id="h-pay-costs"><span class="step">2</span> Product costs</h2>
+      <p class="muted">Raw material cost per piece for each product. Packaging is added for every parcel shipped.
+        <span id="pay-costs-status"></span></p>
+      <div id="pay-costs"></div>
+    </section>
+
+    <section class="card" id="pay-checks-card" aria-labelledby="h-pay-checks" hidden>
+      <h2 id="h-pay-checks"><span class="step">3</span> Checks</h2>
+      <div id="pay-checks"></div>
+    </section>
+
+    <section class="card" id="pay-summary-card" aria-labelledby="h-pay-summary" hidden>
+      <h2 id="h-pay-summary"><span class="step">4</span> Summary</h2>
+      <div class="tiles" id="pay-tiles"></div>
+      <div id="pay-summary"></div>
+    </section>
+
+    <section class="card" id="pay-details-card" aria-labelledby="h-pay-details" hidden>
+      <h2 id="h-pay-details"><span class="step">5</span> Details and download</h2>
+      <div class="tabs" role="tablist" id="pay-tabs"></div>
+      <div id="pay-panel" role="tabpanel"></div>
+      <div class="actions">
+        <button type="button" class="primary" id="pay-download" disabled>Download Excel</button>
+        <span class="muted small">Summary, every order, bank transfers to tick, products and payment lines.</span>
+      </div>
+    </section>
+  </main>
+
   <footer class="wrap foot">
     <p class="muted small">Runs entirely in your browser; nothing is sent anywhere. You remain responsible for
       checking the return before filing.</p>
   </footer>
 
   <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/payapp.js"></script>
 </body>
 </html>
